@@ -1,0 +1,106 @@
+#!/bin/zsh
+
+source .env
+
+ERROR="%F{red}err >>%f"
+DONE="%F{green}fin >>%f"
+
+function date_string() {
+	date +"%Y-%m-%d"
+}
+
+errs=0
+if [ -z "$GOOGLE_DRIVE_DIR" ]; then
+	print -P "$ERROR missing env variable: GOOGLE_DRIVE_DIR"
+	errs=$((errs+1))
+fi
+if [ -z "$NAS_DIR" ]; then
+	print -P "$ERROR missing env variable: NAS_DIR"
+	echo "  tip: run the below to mount the nfs drive"
+	print -P "    %F{cyan}sudo mount -t nfs -o rw <ip.address>:/mnt/path/to/share /path/to/local/mountpoint%f"
+	errs=$((errs+1))
+fi
+
+jam_dir="$1"
+if [ ! -d "$jam_dir" ]; then
+	print -P "$ERROR bad input: jam_dir does not exist: $jam_dir"
+	echo "  tip: use the script like the below example"
+	print -P "    %F{cyan}./seal ~/Music/Logic/Project1%f"
+	errs=$((errs+1))
+fi
+
+out_dir="$2"
+if [ -z "$out_dir" ]; then
+	out_dir="$(date_string)"
+	[[ "$VERBOSE" == "true" ]] && print -P "no out_dir specified, using default: $out_dir"
+fi
+
+if [[ "$errs" != "0" ]]; then
+	exit 1
+fi
+
+if [[ "$VERBOSE" == "true" ]]; then
+	print -P "%F{yellow}use >>%f VERBOSE=$VERBOSE"
+	print -P "%F{yellow}use >>%f DRY=$DRY"
+	print -P "%F{yellow}use >>%f GOOGLE_DRIVE_DIR=$GOOGLE_DRIVE_DIR"
+	print -P "%F{yellow}use >>%f NAS_DIR=$NAS_DIR"
+	print -P "%F{yellow}use >>%f jam_dir=$jam_dir"
+	print -P "%F{yellow}use >>%f out_dir=$out_dir"
+fi
+
+function to_wav() {
+	in="$1"
+	out="$2"
+	ffmpeg -i $in -ar 44100 -c:a pcm_f32le $out
+}
+
+function to_flac() {
+	in="$1"
+	out="$2"
+	ffmpeg -i $in -c:a flac -compression_level 8 $out
+}
+
+out_dir="$(date_string)"
+
+[[ "$VERBOSE" == "true" ]] && echo "make dirs: $GOOGLE_DRIVE_DIR/$out_dir, $NAS_DIR/$out_dir"
+[[ "$DRY" != "true" ]] && mkdir -p "$GOOGLE_DRIVE_DIR/$out_dir"
+[[ "$DRY" != "true" ]] && mkdir -p "$NAS_DIR/$out_dir"
+
+for file in $jam_dir/*; do
+	[[ "$VERBOSE" == "true" ]] && echo "process: $file..."
+
+	name="$(basename $file)"
+	new_name="$(echo $name | tr ' ' '_')"
+	extension="${file##*.}"
+	if [[ "$extension" == "wav" ]]; then 
+		if [ -f "$GOOGLE_DRIVE_DIR/$out_dir/$new_name.flac" ]; then
+			new_name="$new_name_1" # could identify the version of the file and increment it, but for now this is fine
+		elif [ -f "$NAS_DIR/$out_dir/$new_name.flac" ]; then
+			new_name="$new_name_1" # could identify the version of the file and increment it, but for now this is fine
+		fi
+
+		[[ "$VERBOSE" == "true" ]] && echo "to_flac '$file' '$GOOGLE_DRIVE_DIR/$out_dir/$new_name.flac'"
+		[[ "$DRY" != "true" ]] && to_flac "$file" "$GOOGLE_DRIVE_DIR/$out_dir/$new_name.flac"
+
+		[[ "$VERBOSE" == "true" ]] && echo "cp '$file' '$NAS_DIR/$out_dir/$new_name'"
+		[[ "$DRY" != "true" ]] && cp "$file" "$NAS_DIR/$out_dir/$new_name"
+	fi
+
+	if [[ "$extension" == "logicx" ]]; then 
+		pushd "$jam_dir"
+
+		[[ "$VERBOSE" == "true" ]] && echo "zip -9 -r '$GOOGLE_DRIVE_DIR/$out_dir/$new_name.zip' '$name'" 
+		[[ "$DRY" != "true" ]] && zip -9 -r "$GOOGLE_DRIVE_DIR/$out_dir/$new_name.zip" "$name"
+
+		[[ "$VERBOSE" == "true" ]] && echo "zip -9 -r '$NAS_DIR/$out_dir/$new_name.zip' '$name'"
+		[[ "$DRY" != "true" ]] && zip -9 -r "$NAS_DIR/$out_dir/$new_name.zip" "$name"
+
+		popd
+	fi
+
+	print -P "$DONE process: $file"
+	[[ "$DRY" != "true" ]] || [[ "$VERBOSE" == "true" ]] && print -P "--------------------------------------------------------------"
+done
+
+[[ "$DRY" != "true" ]] && print -P "$DONE seal"
+[[ "$DRY" == "true" ]] && print -P "$DONE seal %F{yellow}dry-run%f, nothing actually happened"

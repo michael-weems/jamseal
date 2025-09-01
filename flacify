@@ -1,0 +1,72 @@
+#!/bin/zsh
+
+source .env
+
+ERROR="%F{red}err >>%f"
+DONE="%F{green}fin >>%f"
+
+function date_string() {
+	date +"%Y-%m-%d"
+}
+
+errs=0
+
+jam_dir="$1"
+if [ ! -d "$jam_dir" ]; then
+	print -P "$ERROR bad input: jam_dir does not exist: $jam_dir"
+	echo "  tip: use the script like the below example"
+	print -P "    %F{cyan}./flacify ~/Music/Logic/Project1%f"
+	errs=$((errs+1))
+fi
+
+if [[ "$errs" != "0" ]]; then
+	exit 1
+fi
+
+if [[ "$VERBOSE" == "true" ]]; then
+	print -P "%F{yellow}use >>%f VERBOSE=$VERBOSE"
+	print -P "%F{yellow}use >>%f DRY=$DRY"
+	print -P "%F{yellow}use >>%f GOOGLE_DRIVE_DIR=$GOOGLE_DRIVE_DIR"
+	print -P "%F{yellow}use >>%f NAS_DIR=$NAS_DIR"
+	print -P "%F{yellow}use >>%f jam_dir=$jam_dir"
+fi
+
+function to_wav() {
+	in="$1"
+	out="$2"
+	ffmpeg -i $in -ar 44100 -c:a pcm_f32le $out
+}
+
+function to_flac() {
+	in="$1"
+	out="$2"
+	ffmpeg -i $in -c:a flac -compression_level 8 $out
+}
+
+out_dir="$(date_string)"
+
+for file in $jam_dir/*; do
+	[[ "$VERBOSE" == "true" ]] && echo "process: $file..."
+
+	name="$(basename $file)"
+	new_name="$(echo $name | tr ' ' '_')"
+	extension="${file##*.}"
+	if [[ "$extension" == "wav" ]]; then 
+		new_name="$(basename $name .wav | tr ' ' '_')"
+		if [ -f "$jam_dir/$new_name.flac" ]; then
+			new_name="$new_name_1" # could identify the version of the file and increment it, but for now this is fine
+		fi
+
+		[[ "$VERBOSE" == "true" ]] && echo "to_flac '$file' '$jam_dir/$new_name.flac'"
+		[[ "$DRY" != "true" ]] && to_flac "$file" "$jam_dir/$new_name.flac"
+
+		[[ "$VERBOSE" == "true" ]] && echo "rm '$file'"
+		[[ "$DRY" != "true" ]] && rm "$file"
+	fi
+
+	print -P "$DONE process: $file"
+	[[ "$DRY" != "true" ]] || [[ "$VERBOSE" == "true" ]] && print -P "--------------------------------------------------------------"
+done
+
+[[ "$DRY" != "true" ]] && print -P "$DONE flacify"
+[[ "$DRY" == "true" ]] && print -P "$DONE flacify %F{yellow}dry-run%f, nothing actually happened"

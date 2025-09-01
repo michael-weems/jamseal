@@ -1,0 +1,71 @@
+#!/bin/zsh
+
+source .env
+
+ERROR="%F{red}err >>%f"
+DONE="%F{green}fin >>%f"
+
+function date_string() {
+	date +"%Y-%m-%d"
+}
+
+errs=0
+if [ -z "$GOOGLE_DRIVE_DIR" ]; then
+	print -P "$ERROR missing env variable: GOOGLE_DRIVE_DIR"
+	errs=$((errs+1))
+fi
+if [ -z "$NAS_DIR" ]; then
+	print -P "$ERROR missing env variable: NAS_DIR"
+	echo "  tip: run the below to mount the nfs drive"
+	print -P "    %F{cyan}sudo mount -t nfs -o rw <ip.address>:/mnt/path/to/share /path/to/local/mountpoint%f"
+	errs=$((errs+1))
+fi
+
+if [[ "$errs" != "0" ]]; then
+	exit 1
+fi
+
+if [[ "$VERBOSE" == "true" ]]; then
+	print -P "%F{yellow}use >>%f VERBOSE=$VERBOSE"
+	print -P "%F{yellow}use >>%f DRY=$DRY"
+	print -P "%F{yellow}use >>%f GOOGLE_DRIVE_DIR=$GOOGLE_DRIVE_DIR"
+	print -P "%F{yellow}use >>%f NAS_DIR=$NAS_DIR"
+	print -P "%F{yellow}use >>%f jam_dir=$jam_dir"
+	print -P "%F{yellow}use >>%f out_dir=$out_dir"
+fi
+
+function handle_dir() {
+	dir="$1"
+
+	for file in $dir/*; do
+		if [ ! -d $file ]; then
+			continue
+		fi
+
+		[[ "$VERBOSE" == "true" ]] && echo "process dir: $file..."
+
+		for f in $file/*; do
+			name="$(basename $f)"
+			extension="${f##*.}"
+
+			if [[ "$extension" == "logicx" ]]; then 
+				[[ "$VERBOSE" == "true" ]] && echo "process: $f..."
+				[[ "$VERBOSE" == "true" ]] && echo "zip -9 -r '$f.zip' '$f'" 
+				[[ "$DRY" != "true" ]] && zip -9 -r "$f.zip" "$f"
+
+				[[ "$VERBOSE" == "true" ]] && echo "rm -fr $f" 
+				[[ "$DRY" != "true" ]] && rm -fr "$f"
+			fi
+		done
+
+		print -P "$DONE process: $file"
+		[[ "$DRY" != "true" ]] || [[ "$VERBOSE" == "true" ]] && print -P "--------------------------------------------------------------"
+	done
+}
+
+handle_dir "$GOOGLE_DRIVE_DIR"
+handle_dir "$NAS_DIR"
+
+
+[[ "$DRY" != "true" ]] && print -P "$DONE zipup"
+[[ "$DRY" == "true" ]] && print -P "$DONE zipup %F{yellow}dry-run%f, nothing actually happened"

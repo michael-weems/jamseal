@@ -1,0 +1,71 @@
+#!/bin/zsh
+
+source .env
+
+ERROR="%F{red}err >>%f"
+DONE="%F{green}fin >>%f"
+
+function date_string() {
+	date +"%Y-%m-%d"
+}
+
+errs=0
+if [ -z "$GOOGLE_DRIVE_DIR" ]; then
+	print -P "$ERROR missing env variable: GOOGLE_DRIVE_DIR"
+	errs=$((errs+1))
+fi
+if [ -z "$NAS_DIR" ]; then
+	print -P "$ERROR missing env variable: NAS_DIR"
+	echo "  tip: run the below to mount the nfs drive"
+	print -P "    %F{cyan}sudo mount -t nfs -o rw <ip.address>:/mnt/path/to/share /path/to/local/mountpoint%f"
+	errs=$((errs+1))
+fi
+
+sealed_dir="$1"
+if [ ! -d "$sealed_dir" ]; then
+	print -P "$ERROR bad input: sealed_dir does not exist: $sealed_dir"
+	echo "  tip: use the script like the below example"
+	print -P "    %F{cyan}./unseal /path/to/sealed/dir /path/to/new/project/dir%f"
+	errs=$((errs+1))
+fi
+
+project_dir="$2"
+if [ -z "$project_dir" ]; then
+	print -P "$ERROR bad input: must provide project_dir at arg pos 2"
+	echo "  tip: use the script like the below example"
+	print -P "    %F{cyan}./unseal /path/to/sealed/dir /path/to/new/project/dir%f"
+	errs=$((errs+1))
+fi
+
+if [[ "$errs" != "0" ]]; then
+	exit 1
+fi
+
+if [[ "$VERBOSE" == "true" ]]; then
+	print -P "%F{yellow}use >>%f VERBOSE=$VERBOSE"
+	print -P "%F{yellow}use >>%f DRY=$DRY"
+	print -P "%F{yellow}use >>%f GOOGLE_DRIVE_DIR=$GOOGLE_DRIVE_DIR"
+	print -P "%F{yellow}use >>%f NAS_DIR=$NAS_DIR"
+	print -P "%F{yellow}use >>%f sealed_dir=$sealed_dir"
+	print -P "%F{yellow}use >>%f project_dir=$project_dir"
+fi
+
+out_dir="$project_dir"
+
+[[ "$VERBOSE" == "true" ]] && echo "mkdir: $out_dir"
+[[ "$DRY" != "true" ]] && mkdir -p "$out_dir"
+
+for file in $sealed_dir/*; do
+	[[ "$VERBOSE" == "true" ]] && echo "process: $file..."
+
+	name="$(basename $file)"
+	extension="${file##*.}"
+
+	if [[ "$extension" == "zip" ]]; then 
+		[[ "$VERBOSE" == "true" ]] && echo "unzip '$file' -d '$out_dir'" 
+		[[ "$DRY" != "true" ]] && unzip "$file" -d "$out_dir" 
+	fi
+done
+
+[[ "$DRY" != "true" ]] && print -P "$DONE unseal"
+[[ "$DRY" == "true" ]] && print -P "$DONE unseal %F{yellow}dry-run%f, nothing actually happened"

@@ -13,6 +13,48 @@ I need it to support copying files to:
 
 ## Usage
 
+### Configuration
+
+Create a `config.toml` file in this workspace directory, formatted like below:
+
+```toml
+[drives]
+
+[drives.a]
+path = "/path/to/your/drive"
+output_format = "wav"
+include_project = true
+
+[drives.b]
+path = "/path/to/drive/b"
+output_format = "flac"
+include_project = false
+```
+
+#### Options
+
+- `[drives.a]` specifies which drive the
+- `path` --> full-path on the file-system to copy files to
+- `output_format` --> `flac` | `wav` are supported currently
+- `include_project` --> whether to also copy the logic-pro project to that location
+
+#### Example
+
+Example configuration:
+```toml
+[drives]
+
+[drives.google]
+path = "/mnt/gdrive"
+output_format = "wav"
+include_project = false
+
+[drives.nas]
+path = "/mnt/mynas/audio"
+output_format = "flac"
+include_project = true
+```
+
 ### "Sealing" a project
 
 Done with a jam, time to upload to storage: 

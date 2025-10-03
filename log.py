@@ -2,7 +2,7 @@ _verbose = False
 
 def verbose(msg):
 	if _verbose:
-		print(msg)
+		print(f" verb >> {msg}")
 
 # Define ANSI escape codes for colors and reset
 RED = '\033[91m'
@@ -12,7 +12,7 @@ BLUE = '\033[94m'
 RESET = '\033[0m' # Resets color and style
 
 def fail(msg):
-	print(f"{RED}  fail >> {msg}{RESET}")
+	print(f"{RED} fail >> {msg}{RESET}")
 
 def warn(msg):
 	print(f"{YELLOW} warn >> {msg}{RESET}")

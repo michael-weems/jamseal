@@ -1,48 +1,153 @@
 import os
+import sys
 import subprocess
+from enum import Enum
+from datetime import datetime
 
 import log
 import tomllib
 
-with open("config.toml", "rb") as f:
-    config_file = tomllib.load(f)
 
-#ERROR="%F{red}err >>%f"
-#DONE="%F{green}fin >>%f"
+def defaults():
+    now = datetime.now()
+    _c = {
+        "config_file": "config.toml",
+        "date": now.strftime("%Y-%m-%d"),
+        "input": "",
+        "dry": False,
+        "verbose": False,
+    }
+    return _c
 
-print(config_file)
+config = defaults()
 
-def to_wav_cmd(in_file, out_file):
-	return f"ffmpeg -i {in_file} -ar 44100 -c:a pcm_f32le {out_file}"
+print(sys.argv)
 
-def to_flac_cmd(in_file, out_file):
-	return f"ffmpeg -i {in_file} -c:a flac -compression_level 8 {out_file}"
+argc = len(sys.argv)
+i = 0
+while i < argc:
+    if sys.argv[i] == "-verbose":
+        log._verbose = True
+        config["verbose"] = True
+    i = i + 1
 
-def run_cmd(cmd):
-    try:
-        log.verbose(f"{cmd}")
-        subprocess.run(cmd)
-    except KeyboardInterrupt:
-        print("Cancelled")
-    except subprocess.CalledProcessError as e:
-        print(f"Subprocess failed with error: {e}")
+# NOTE: multiple loops fine since arg count is generally small and we want to make sure we get the config file before applying other options on top of it
+i = 1
+while i < argc:
+    if sys.argv[i] == "-config":
+        i = i + 1
+        config["config_file"] = sys.argv[i]
+        log.verbose(f"[arg] config-file: {config["config_file"]}")
+    elif sys.argv[i] == "-verbose":
+        log.verbose(f"[arg] verbose: {config["verbose"]}")
+    elif sys.argv[i] == "-dry":
+        config["dry"] = True
+        log.verbose(f"[arg] dry: {config["dry"]}")
+    elif sys.argv[i] == "-date":
+        i = i + 1
+        config["date"] = sys.argv[i]
+        log.verbose(f"[arg] date: {config["date"]}")
+    else:
+        config["input"] = sys.argv[i]
+        log.verbose(f"[arg] input: {config["input"]}")
 
-# TODO: move these somewhere else + read in from cli args
-log._verbose=True
-dry=True
-jam_dir="/home/"
+    i = i + 1
 
-log.verbose(f"{log.YELLOW}use >>{log.RESET} VERBOSE={log._verbose}")
-log.verbose(f"{log.YELLOW}use >>{log.RESET} DRY={dry}")
-log.verbose(f"{log.YELLOW}use >>{log.RESET} JAM_DIR={jam_dir}")
+if not config["config_file"]:
+    log.fail("no config file specified")
+    sys.exit(1)
 
-for key in config_file["drives"]:
-    drive = config_file["drives"][key]
+try:
+    log.verbose(f"read config from: {config["config_file"]}")
+    with open(config["config_file"], "rb") as f:
+        config_file = tomllib.load(f)
+except:
+    log.fail(f"read config file: {config["config_file"]}")
+    sys.exit(1)
 
-    log.verbose(f"{log.YELLOW}for >>{log.RESET} drive={key}")
-    log.verbose(f"{log.YELLOW}  use >>{log.RESET} path={drive['path']}")
-    log.verbose(f"{log.YELLOW}  use >>{log.RESET} format={drive['output_format']}")
-    log.verbose(f"{log.YELLOW}  use >>{log.RESET} project={drive['include_project']}")
+if not config["input"]:
+    log.fail("no input directory specified")
+    sys.exit(1)
 
 
+log._verbose=config["verbose"]
+dry=config["dry"]
+input_dir=config["input"]
+out = config["date"]
 
+log.verbose(f"{log.BLUE}use >>{log.RESET} VERBOSE={log._verbose}")
+log.verbose(f"{log.BLUE}use >>{log.RESET} DRY={dry}")
+log.verbose(f"{log.BLUE}use >>{log.RESET} INPUT_DIR={input_dir}")
+
+DRIVE_PATH = "path"
+
+class FileAction(Enum):
+    Copy = "copy"
+    Compress = "compress"
+    Ffmpeg = "ffmpeg"
+
+ACTION = "action"
+FFMPEG_OPTS = "ffmpeg_opts"
+
+out_dir= config["date"]
+
+try:
+    for filename in os.listdir(input_dir):
+        file_path = os.path.join(input_dir, filename)
+        log.verbose(f"{log.BLUE}{filename} >>{log.RESET} path={file_path}")
+
+        base_name, extension = os.path.splitext(file_path)
+        extension = extension[1:]
+        name=os.path.basename(file_path)
+        new_name=name.replace(' ', '_')
+
+        log.verbose(f"{log.BLUE}{filename} >>{log.RESET} name={name}")
+        log.verbose(f"{log.BLUE}{filename} >>{log.RESET} base_name={base_name}")
+        log.verbose(f"{log.BLUE}{filename} >>{log.RESET} new_name={new_name}")
+
+        for key in config_file["drives"]:
+            log.verbose(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key}{log.RESET}")
+            drive = config_file["drives"][key]
+
+            if drive.get(extension) is None:
+                log.warn(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} unsupported file extension: {extension}")
+                log.verbose(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} skip file")
+                continue
+
+            file_actions = drive[extension]
+            full_out_dir=os.path.join(drive[DRIVE_PATH], out_dir)
+            os.makedirs(full_out_dir, exist_ok=True)
+
+            out_base_filename = os.path.join(full_out_dir, new_name)
+            log.verbose(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} action={file_actions[ACTION]}")
+            log.verbose(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} out_base_filename={out_base_filename}")
+
+            cmd = []
+            if file_actions[ACTION] == FileAction.Compress.value:
+                cmd = ["zip", "-9", "-r", f"{out_base_filename}.zip", file_path]
+            elif file_actions[ACTION] == FileAction.Ffmpeg.value:
+                if file_actions.get(FFMPEG_OPTS) is None:
+                    log.fail(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} no ffmpeg opts specified: {file_actions[FFMPEG_OPTS]}")
+                    continue
+
+                ffmpeg_args = file_actions[FFMPEG_OPTS].split(" ")
+
+                cmd = ["ffmpeg", "-i", file_path, *ffmpeg_args, out_base_filename]
+            elif file_actions[ACTION] == FileAction.Copy.value:
+                cmd = ["cp", "-r", file_path, f"{out_base_filename}.{extension}"]
+            else:
+                log.fail(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} no cmd specified")
+                continue
+
+            log.verbose(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} cmd={cmd}")
+
+            if dry:
+                log.done(f"dry run: {cmd}")
+            else:
+                log.verbose(cmd)
+                subprocess.run(cmd)
+
+except FileNotFoundError as e:
+    log.fail(f"file not found: {e}")
+except Exception as e:
+    log.fail(f"unknown error: {e}")

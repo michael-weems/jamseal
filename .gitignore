@@ -1,6 +1,7 @@
 .env
 *.wav
 *.flac
-config.toml
+*.toml
+!config-example.toml
 __pycache__/
 __pycache__/*

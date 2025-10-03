@@ -1,0 +1,25 @@
+[drives]
+
+[drives.a]
+path = "drives/a"
+[drives.a.logicx]
+action = "compress"
+[drives.a.wav]
+action = "ffmpeg"
+ffmpeg_opts = "-ar 44100 -c:a pcm_f32le"
+
+[drives.b]
+path = "drives/b"
+[drives.b.logicx]
+action = "copy"
+[drives.b.wav]
+action = "ffmpeg"
+ffmpeg_opts = "-ar 44100 -c:a pcm_f32le"
+
+[drives.c]
+path = "drives/c"
+[drives.c.logicx]
+action = "compress"
+[drives.c.wav]
+action = "ffmpeg"
+ffmpeg_opts = "-c:a flac -compression_level 8"

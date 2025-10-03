@@ -1,0 +1,2 @@
+- [ ] convert unseal to python
+- [ ] remove seal and unseal bash scripts

@@ -31,7 +31,6 @@ while i < argc:
         config["verbose"] = True
     i = i + 1
 
-# NOTE: multiple loops fine since arg count is generally small and we want to make sure we get the config file before applying other options on top of it
 i = 1
 while i < argc:
     if sys.argv[i] == "-config":

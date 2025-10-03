@@ -87,6 +87,7 @@ class FileAction(Enum):
 
 ACTION = "action"
 FFMPEG_OPTS = "ffmpeg_opts"
+FFMPEG_FORMAT = "ffmpeg_format"
 
 out_dir= config["date"]
 
@@ -131,9 +132,11 @@ try:
 
                 ffmpeg_args = file_actions[FFMPEG_OPTS].split(" ")
 
-                cmd = ["ffmpeg", "-i", file_path, *ffmpeg_args, out_base_filename]
+                out_base_name, in_extension = os.path.splitext(out_base_filename)
+
+                cmd = ["ffmpeg", "-i", file_path, *ffmpeg_args, f"{out_base_name}.{file_actions[FFMPEG_FORMAT]}"]
             elif file_actions[ACTION] == FileAction.Copy.value:
-                cmd = ["cp", "-r", file_path, f"{out_base_filename}.{extension}"]
+                cmd = ["cp", "-r", file_path, f"{out_base_filename}"]
             else:
                 log.fail(f"{log.BLUE}{filename} >>{log.RESET} {log.YELLOW}{key} >>{log.RESET} no cmd specified")
                 continue

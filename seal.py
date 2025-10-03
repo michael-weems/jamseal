@@ -60,8 +60,8 @@ try:
     log.verbose(f"read config from: {config["config_file"]}")
     with open(config["config_file"], "rb") as f:
         config_file = tomllib.load(f)
-except:
-    log.fail(f"read config file: {config["config_file"]}")
+except Exception as e:
+    log.fail(f"read config file: {config["config_file"]}: {e}")
     sys.exit(1)
 
 if not config["input"]:
